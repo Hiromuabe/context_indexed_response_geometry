@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.pytest_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Large or generated artifacts are intentionally not published.
+data/*.jsonl
+data/*.json
+models/
+results/
+reports/
+artifacts/
+logs/
+*.npy
+*.npz
+*.pt
+*.pth
+*.safetensors

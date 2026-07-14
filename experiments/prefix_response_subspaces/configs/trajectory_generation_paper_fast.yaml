@@ -1,0 +1,8 @@
+{
+  "model_config": "configs/basepoint_main.json",
+  "dataset": {"name": "openai/gsm8k", "subset": "main", "source_split": "train", "revision": "main", "max_problems": 2000},
+  "prompt": {"template": "Question: {question}\nLet's solve this step by step.\n"},
+  "generation": {"strategy": "greedy", "max_new_tokens": 256, "stop_on_eos": true, "use_kv_cache": true, "answer_cue": "\nFinal answer:"},
+  "runtime": {"per_device_batch_size": 8, "precision": "auto"},
+  "output": {"trajectories_jsonl": "data/gsm8k_prefix_response_trajectories_paper_fast.jsonl", "metadata_json": "data/gsm8k_prefix_response_trajectories_paper_fast.metadata.json", "gpu_memory_jsonl": "data/gsm8k_prefix_response_trajectories_paper_fast.gpu_memory.jsonl"}
+}

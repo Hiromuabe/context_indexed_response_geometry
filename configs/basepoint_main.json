@@ -1,0 +1,57 @@
+{
+  "project": {
+    "name": "basepoint_prefix_displacements",
+    "seed": 0
+  },
+  "data": {
+    "trajectories_jsonl": "data/gsm8k_trajectories.jsonl",
+    "max_sequence_length": 4096
+  },
+  "split": {
+    "unit": "gsm8k_problem_id",
+    "seed": 0,
+    "ratios": {
+      "train": 0.8,
+      "dev": 0.1,
+      "test": 0.1
+    },
+    "registry_path": "artifacts/splits/split_registry.json"
+  },
+  "cache": {
+    "output_dir": "artifacts/cache/qwen25_math_15b_layer16_run001",
+    "max_records_per_shard": 2048,
+    "max_bytes_per_shard": 1073741824,
+    "storage_dtype": "float32",
+    "zero_norm_epsilon": 1e-12,
+    "delta_atol": 1e-5,
+    "delta_rtol": 1e-4
+  },
+  "model": {
+    "checkpoint": "Qwen/Qwen2.5-Math-1.5B",
+    "revision": "main",
+    "model_type": "base",
+    "layer": 16,
+    "layer_numbering": "zero_based_transformer_block",
+    "hook": "transformer_block_output_resid_post",
+    "dtype": "auto",
+    "attention_implementation": "sdpa",
+    "local_files_only": false,
+    "trust_remote_code": false
+  },
+  "margin": {
+    "definition": "first_divergent_answer_token_logit_difference",
+    "candidate_answers": "per_trajectory_positive_and_negative_token_ids",
+    "multi_token_aggregation": "teacher_force_shared_answer_prefix_then_compare_first_divergent_token",
+    "teacher_forcing": true,
+    "gradient_location": "arrival",
+    "evaluation_position": "per_trajectory"
+  },
+  "runtime": {
+    "per_device_batch_size": 1,
+    "num_workers": 0,
+    "pin_memory": true,
+    "precision": "auto",
+    "gradient_accumulation_steps": 1,
+    "fail_on_oom": true
+  }
+}

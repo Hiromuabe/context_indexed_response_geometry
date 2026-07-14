@@ -1,0 +1,17 @@
+{
+  "profile": "paper_full", "seed": 0,
+  "model": {"checkpoint": "Qwen/Qwen2.5-Math-1.5B", "revision": "main", "model_type": "base", "local_files_only": false, "trust_remote_code": false, "attention_implementation": "sdpa", "precision": "auto", "normalized_depths": [0.25, 0.5, 0.75, 1.0], "additional_target_layers": [0]},
+  "replication_model": {"checkpoint": "Qwen/Qwen2.5-1.5B", "revision": "main", "model_type": "base", "local_files_only": false, "trust_remote_code": false, "attention_implementation": "sdpa", "precision": "auto", "normalized_depths": [0.25, 0.5, 0.75, 1.0], "additional_target_layers": [0]},
+  "data": {"trajectories_jsonl": "data/gsm8k_trajectories.jsonl", "trajectory_generation_config": "experiments/prefix_response_subspaces/configs/trajectory_generation_full.yaml", "prefix_pool_size": 5000, "evaluation_prefixes": 256, "auxiliary_prefixes": 128, "analysis_dev_prefixes": 128, "analysis_train_prefixes": 128, "candidate_selection_prefixes": 128, "prefixes_per_problem": 1, "min_prefix_tokens": 8, "min_remaining_tokens": 4, "position_strata": 3, "length_bins": 4},
+  "candidates": {"total": 320, "calibration": 64, "analysis": 256, "folds": 4, "proposal_top_k": 1024, "probability_bands": 4, "coverage_bands": 4, "next_token_logits_storage_dtype": "float32"},
+  "controls": {"kind": "wrong_prefix", "wrong_prefixes_per_target": 5, "prefer_same_last_token": true},
+  "extraction": {"per_device_batch_size": 16, "storage_dtype": "float16", "prefix_chunk_size": 8},
+  "analysis": {"ranks": [1, 2, 4, 8, 16, 32, 64], "selection_rank": 16, "r90_fraction": 0.90, "high_probability_top_ks": [128, 256], "high_probability_primary_top_k": 256, "high_probability_min_tokens": 16, "outlier_directions": 1},
+  "selection": {"layer_rule": "maximize_dev_min_conditional_global_wrong_delta_at_selection_rank", "rank_rule": "smallest_rank_reaching_90pct_of_rank64_dev_ev"},
+  "permutation": {"replicates": 500, "minimum_stratum_size": 2, "minimum_exchangeable_prefix_fraction": 0.80},
+  "statistics": {"bootstrap_replicates": 2000, "ci": 0.95},
+  "functional": {"enabled": true, "calibration_stability_sizes": [16, 32, 64], "rank0_stability_relative_tolerance": 0.10, "rank0_anchor_tolerance": 1e-7, "denominator_epsilon": 1e-8, "oracle_tolerance": 1e-6, "per_device_batch_size": 8},
+  "content": {"enabled_appendix": true, "exclude_bos": true, "attention_sink_positions": [0]},
+  "replication": {"enabled": true, "run_functional": false, "run_permutations": false},
+  "results_root": "results/prefix_response_paper/full_v1"
+}

@@ -1,0 +1,7 @@
+# Top-level packages recorded on the two-A100 experiment server.
+# Install the PyTorch build appropriate for CUDA 12.2 on the target machine.
+numpy==2.4.4
+torch==2.4.0
+transformers==5.5.4
+datasets==4.8.4
+matplotlib==3.10.8
