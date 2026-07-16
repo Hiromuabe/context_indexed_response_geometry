@@ -111,9 +111,3 @@ See `REPRODUCIBILITY.md` for the artifact flow and
 python -m unittest discover -s experiments/prefix_response_subspaces/tests -v
 python scripts/validate_release.py
 ```
-
-## Before making a public repository
-
-Choose and add a software license, replace mutable `revision: main` values with
-the exact commits from the run manifests, and archive `environment.txt` with
-the tagged release. These items should not be guessed by this code package.
