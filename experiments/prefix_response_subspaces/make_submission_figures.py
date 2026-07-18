@@ -440,7 +440,7 @@ def make_block_figure(root: Path, output: Path, dpi: int) -> list[Path]:
         raise ValueError("value-span fractions must lie in [0, 1]")
 
     fig, axes = plt.subplots(1, 2, figsize=(6.9, 2.75), layout="constrained")
-    fig.suptitle("Response geometry across decoder block 0", fontsize=10.5, fontweight="bold")
+    fig.suptitle("Interaction-energy fractions within decoder block 0", fontsize=10.5, fontweight="bold")
     ax = axes[0]
     bars = ax.bar([0, 1], energies, color=[MECH_SKY, MECH_BLUE], edgecolor=INK, linewidth=0.8, width=0.58)
     for bar in bars:

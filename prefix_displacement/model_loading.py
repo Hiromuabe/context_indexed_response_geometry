@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-MODEL_PATH_ENV = "BLACK2026_MODEL_PATH"
+MODEL_PATH_ENV = "RESPONSE_GEOMETRY_MODEL_PATH"
 
 
 def resolve_model_source(

@@ -1,0 +1,37 @@
+{
+  "split": {
+    "unit": "gsm8k_problem_id",
+    "seed": "REQUIRED_FROM_AUDIT",
+    "ratios": {
+      "train": "REQUIRED_FROM_AUDIT",
+      "dev": "REQUIRED_FROM_AUDIT",
+      "test": "REQUIRED_FROM_AUDIT"
+    },
+    "registry_path": "artifacts/splits/split_registry.json"
+  },
+  "cache": {
+    "output_dir": "artifacts/caches/transition_cache",
+    "max_records_per_shard": 2048,
+    "max_bytes_per_shard": 1073741824,
+    "storage_dtype": "float32",
+    "zero_norm_epsilon": 1e-12,
+    "delta_atol": 1e-5,
+    "delta_rtol": 1e-4
+  },
+  "model": {
+    "checkpoint": "REQUIRED_FROM_AUDIT",
+    "revision": "REQUIRED_FROM_AUDIT",
+    "layer": 16,
+    "hook": "REQUIRED_FROM_AUDIT",
+    "dtype": "REQUIRED_FROM_AUDIT",
+    "attention_implementation": "REQUIRED_FROM_AUDIT"
+  },
+  "margin": {
+    "definition": "REQUIRED_FROM_AUDIT",
+    "candidate_answers": "REQUIRED_FROM_AUDIT",
+    "multi_token_aggregation": "REQUIRED_FROM_AUDIT",
+    "teacher_forcing": "REQUIRED_FROM_AUDIT",
+    "gradient_location": "arrival",
+    "evaluation_position": "REQUIRED_FROM_AUDIT"
+  }
+}

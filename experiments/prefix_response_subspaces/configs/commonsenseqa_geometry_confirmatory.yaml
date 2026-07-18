@@ -1,0 +1,86 @@
+{
+  "profile": "commonsenseqa_external_geometry_confirmatory",
+  "design_reference_config": "experiments/prefix_response_subspaces/configs/paper_full_fast.yaml",
+  "seed": 0,
+  "model": {
+    "checkpoint": "Qwen/Qwen2.5-Math-1.5B",
+    "revision": "main",
+    "model_type": "base",
+    "local_files_only": false,
+    "trust_remote_code": false,
+    "attention_implementation": "sdpa",
+    "precision": "auto",
+    "target_layers": [0],
+    "additional_target_layers": []
+  },
+  "data": {
+    "trajectories_jsonl": "data/commonsenseqa_prefix_response_trajectories_confirmatory.jsonl",
+    "trajectory_generation_config": "experiments/prefix_response_subspaces/configs/trajectory_generation_commonsenseqa_confirmatory.yaml",
+    "prefix_pool_size": 1536,
+    "evaluation_prefixes": 256,
+    "auxiliary_prefixes": 128,
+    "analysis_dev_prefixes": 128,
+    "analysis_train_prefixes": 128,
+    "candidate_selection_prefixes": 128,
+    "prefixes_per_problem": 1,
+    "min_prefix_tokens": 8,
+    "min_remaining_tokens": 4,
+    "position_strata": 3,
+    "length_bins": 4
+  },
+  "candidates": {
+    "total": 320,
+    "calibration": 64,
+    "analysis": 256,
+    "folds": 4,
+    "proposal_top_k": 1024,
+    "probability_bands": 4,
+    "coverage_bands": 4,
+    "next_token_logits_storage_dtype": "float32"
+  },
+  "controls": {
+    "kind": "wrong_prefix",
+    "wrong_prefixes_per_target": 5,
+    "prefer_same_last_token": true
+  },
+  "extraction": {
+    "per_device_batch_size": 16,
+    "storage_dtype": "float16",
+    "prefix_chunk_size": 8
+  },
+  "analysis": {
+    "ranks": [1, 2, 4, 8, 16, 32, 64],
+    "selection_rank": 16,
+    "r90_fraction": 0.90,
+    "high_probability_top_ks": [128, 256],
+    "high_probability_primary_top_k": 256,
+    "high_probability_min_tokens": 16,
+    "outlier_directions": 1,
+    "report_multirank_controls": true
+  },
+  "selection": {
+    "layer_rule": "fixed_block_0_external_dataset_replication",
+    "rank_rule": "fixed_rank_64_with_multirank_sensitivity"
+  },
+  "permutation": {
+    "replicates": 500,
+    "minimum_stratum_size": 2,
+    "minimum_exchangeable_prefix_fraction": 0.80
+  },
+  "statistics": {"bootstrap_replicates": 2000, "ci": 0.95},
+  "content": {
+    "enabled_appendix": false,
+    "exclude_bos": true,
+    "attention_sink_positions": [0]
+  },
+  "replication": {
+    "enabled": false,
+    "run_functional": false,
+    "run_permutations": true
+  },
+  "replication_mode": true,
+  "replication_independent_tokenizer": true,
+  "replication_confirmatory_fixed_layer": 0,
+  "replication_confirmatory_fixed_rank": 64,
+  "results_root": "results/prefix_response_commonsenseqa/geometry_confirmatory_v1"
+}

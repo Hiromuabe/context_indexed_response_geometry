@@ -1,0 +1,85 @@
+{
+  "profile": "commonsenseqa_external_geometry_smoke",
+  "seed": 0,
+  "model": {
+    "checkpoint": "Qwen/Qwen2.5-Math-1.5B",
+    "revision": "main",
+    "model_type": "base",
+    "local_files_only": false,
+    "trust_remote_code": false,
+    "attention_implementation": "sdpa",
+    "precision": "auto",
+    "target_layers": [0],
+    "additional_target_layers": []
+  },
+  "data": {
+    "trajectories_jsonl": "data/commonsenseqa_prefix_response_trajectories_smoke.jsonl",
+    "trajectory_generation_config": "experiments/prefix_response_subspaces/configs/trajectory_generation_commonsenseqa_smoke.yaml",
+    "prefix_pool_size": 64,
+    "evaluation_prefixes": 12,
+    "auxiliary_prefixes": 8,
+    "analysis_dev_prefixes": 8,
+    "analysis_train_prefixes": 16,
+    "candidate_selection_prefixes": 8,
+    "prefixes_per_problem": 1,
+    "min_prefix_tokens": 8,
+    "min_remaining_tokens": 4,
+    "position_strata": 2,
+    "length_bins": 2
+  },
+  "candidates": {
+    "total": 64,
+    "calibration": 16,
+    "analysis": 48,
+    "folds": 3,
+    "proposal_top_k": 256,
+    "probability_bands": 2,
+    "coverage_bands": 2,
+    "next_token_logits_storage_dtype": "float32"
+  },
+  "controls": {
+    "kind": "wrong_prefix",
+    "wrong_prefixes_per_target": 3,
+    "prefer_same_last_token": true
+  },
+  "extraction": {
+    "per_device_batch_size": 16,
+    "storage_dtype": "float16",
+    "prefix_chunk_size": 8
+  },
+  "analysis": {
+    "ranks": [2, 4, 8],
+    "selection_rank": 4,
+    "r90_fraction": 0.90,
+    "high_probability_top_ks": [32, 48],
+    "high_probability_primary_top_k": 48,
+    "high_probability_min_tokens": 8,
+    "outlier_directions": 1,
+    "report_multirank_controls": true
+  },
+  "selection": {
+    "layer_rule": "fixed_block_0_external_dataset_smoke",
+    "rank_rule": "fixed_rank_8_with_multirank_sensitivity"
+  },
+  "permutation": {
+    "replicates": 0,
+    "minimum_stratum_size": 2,
+    "minimum_exchangeable_prefix_fraction": 0.80
+  },
+  "statistics": {"bootstrap_replicates": 200, "ci": 0.95},
+  "content": {
+    "enabled_appendix": false,
+    "exclude_bos": true,
+    "attention_sink_positions": [0]
+  },
+  "replication": {
+    "enabled": false,
+    "run_functional": false,
+    "run_permutations": false
+  },
+  "replication_mode": true,
+  "replication_independent_tokenizer": true,
+  "replication_confirmatory_fixed_layer": 0,
+  "replication_confirmatory_fixed_rank": 8,
+  "results_root": "results/prefix_response_commonsenseqa/geometry_smoke_v1"
+}

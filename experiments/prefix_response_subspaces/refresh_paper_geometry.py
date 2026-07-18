@@ -10,8 +10,10 @@ from .analyze_paper_geometry import (
     _add_pooled_top_k_summary,
     _candidate_rank_map,
     _pooled_top_k_rows,
+    _rotation_rows_for_ranks,
     _write_csv,
 )
+from .src.storage import load_residual_entry
 from .src.utils import atomic_json, ensure_layout, file_sha256, load_config, read_json, read_jsonl
 
 
@@ -119,14 +121,111 @@ def refresh_geometry(config, root):
     return summary_path
 
 
+def refresh_multirank_rotation(config, root):
+    """Build the rank-wise rotation table from saved residuals only.
+
+    This deliberately leaves the completed geometry summary, permutation output,
+    and held-out EV rows untouched.  It is intended for legacy runs that saved
+    only the selected-rank rotation table.
+    """
+    summary_path = root / "metrics/paper_geometry_summary.json"
+    residual_path = root / "manifests/residuals.json"
+    hidden_path = root / "manifests/hidden_states.json"
+    wrong_path = root / "controls/wrong_prefixes.jsonl"
+    for path in (summary_path, residual_path, hidden_path, wrong_path):
+        if not path.is_file():
+            raise FileNotFoundError(path)
+
+    summary = read_json(summary_path)
+    residual = read_json(residual_path)
+    hidden = read_json(hidden_path)
+    prefixes = read_jsonl(hidden["prefix_snapshot"])
+    wrong_rows = read_jsonl(wrong_path)
+    wrong_map = {row["prefix_id"]: row["wrong_prefix_ids"] for row in wrong_rows}
+    relaxed_wrong_targets = {
+        row["prefix_id"]
+        for row in wrong_rows
+        if int(row.get("relaxed_length_wrong_prefixes", 0)) > 0
+    }
+    selected_layer = int(summary["selected_layer"])
+    ranks = sorted(set(map(int, config["analysis"]["ranks"])))
+    rows = []
+    selected_entries = [
+        entry for entry in residual["entries"]
+        if int(entry["layer"]) == selected_layer
+    ]
+    if not selected_entries:
+        raise RuntimeError(f"no residual entries found for selected layer {selected_layer}")
+
+    for entry_number, entry in enumerate(selected_entries, start=1):
+        fold = int(entry["fold"])
+        print(
+            f"[rotation_rank_curve] fold={fold} entry={entry_number}/{len(selected_entries)} "
+            f"layer={selected_layer} ranks={ranks}",
+            flush=True,
+        )
+        bundle = load_residual_entry(entry)
+        fold_rows = _rotation_rows_for_ranks(
+            bundle["train_residuals"],
+            prefixes,
+            bundle["nonauxiliary_prefix_indices"],
+            wrong_map,
+            ranks,
+            selected_layer,
+            fold,
+            int(config["seed"]),
+        )
+        for row in fold_rows:
+            row["wrong_control_exact_length_bin"] = row["prefix_id"] not in relaxed_wrong_targets
+        rows.extend(fold_rows)
+
+    expected_rows = (
+        int(config["data"]["evaluation_prefixes"])
+        * int(config["candidates"]["folds"])
+        * len(ranks)
+    )
+    if len(rows) != expected_rows:
+        raise RuntimeError(
+            f"incomplete multirank rotation table: observed {len(rows)} rows, "
+            f"expected {expected_rows}"
+        )
+
+    output_path = root / "metrics/paper_rotation_rank_rows.csv"
+    _write_csv(output_path, rows)
+    manifest_path = root / "manifests/paper_geometry.json"
+    if manifest_path.is_file():
+        manifest = read_json(manifest_path)
+        manifest.update({
+            "rotation_rank_rows": str(output_path),
+            "rotation_rank_rows_sha256": file_sha256(output_path),
+            "multirank_rotation_refreshed_from_saved_residuals": True,
+        })
+        atomic_json(manifest_path, manifest)
+    return output_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Refresh Top-k and control-coverage audits from completed geometry artifacts without rerunning rank curves or permutations"
     )
     parser.add_argument("--config", required=True)
+    parser.add_argument(
+        "--multirank-rotation-only",
+        action="store_true",
+        help="Generate paper_rotation_rank_rows.csv from saved residuals without rerunning EV or permutations",
+    )
     args = parser.parse_args()
     config = load_config(args.config)
-    print(refresh_geometry(config, ensure_layout(config)))
+    if args.multirank_rotation_only:
+        # A legacy completed run must retain its original resolved config.
+        # This read-only-derived refresh does not create a new run layout, so it
+        # should not reject the run merely because the working config gained an
+        # unrelated field after completion.
+        root = Path(config["results_root"])
+        print(refresh_multirank_rotation(config, root))
+    else:
+        root = ensure_layout(config)
+        print(refresh_geometry(config, root))
 
 
 if __name__ == "__main__":

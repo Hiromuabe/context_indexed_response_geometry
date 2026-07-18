@@ -1,48 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Standard public reproduction: main Qwen2.5-Math plus the Qwen2.5 and Llama
-# fixed-condition replications. Qwen3 is intentionally not included.
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 
-CONFIG="${CONFIG:-experiments/prefix_response_subspaces/configs/paper_full_fast.yaml}"
+MAIN_CONFIG="${MAIN_CONFIG:-experiments/prefix_response_subspaces/configs/paper_full_fast.yaml}"
 ADDITIONAL_CONFIG="${ADDITIONAL_CONFIG:-experiments/prefix_response_subspaces/configs/paper_additional_experiments.yaml}"
+EXTERNAL_CONFIG="${EXTERNAL_CONFIG:-experiments/prefix_response_subspaces/configs/commonsenseqa_geometry_confirmatory.yaml}"
+EXTERNAL_GENERATION_CONFIG="${EXTERNAL_GENERATION_CONFIG:-experiments/prefix_response_subspaces/configs/trajectory_generation_commonsenseqa_confirmatory.yaml}"
 
 main_model_args=()
 source_model_args=()
 replication_model_args=()
 
-# Local checkpoint paths are optional. With no variables set, Transformers
-# resolves the public Hugging Face checkpoints named in the configuration.
-if [[ -n "${QWEN_MATH_PATH:-}" ]]; then
-  main_model_args+=(--model-path "$QWEN_MATH_PATH")
-  source_model_args+=(--source-model-path "$QWEN_MATH_PATH")
+if [[ -n "${MAIN_MODEL_PATH:-}" ]]; then
+  main_model_args+=(--model-path "$MAIN_MODEL_PATH")
+  source_model_args+=(--source-model-path "$MAIN_MODEL_PATH")
 fi
-if [[ -n "${QWEN_BASE_PATH:-}" ]]; then
-  replication_model_args+=(--model-path "qwen25_15b=$QWEN_BASE_PATH")
+if [[ -n "${BASE_MODEL_PATH:-}" ]]; then
+  replication_model_args+=(--model-path "qwen25_15b=$BASE_MODEL_PATH")
 fi
-if [[ -n "${LLAMA_PATH:-}" ]]; then
-  replication_model_args+=(--model-path "llama32_3b=$LLAMA_PATH")
+if [[ -n "${LLAMA_MODEL_PATH:-}" ]]; then
+  replication_model_args+=(--model-path "llama32_3b=$LLAMA_MODEL_PATH")
 fi
 
 python3 -m experiments.prefix_response_subspaces.run_paper_pipeline \
-  --config "$CONFIG" \
+  --config "$MAIN_CONFIG" \
   "${main_model_args[@]}" \
   --skip-replication
 
 python3 -m experiments.prefix_response_subspaces.run_paper_replication \
-  --config "$CONFIG" \
+  --config "$MAIN_CONFIG" \
   "${source_model_args[@]}" \
   "${replication_model_args[@]}" \
   --only qwen25_15b \
   --only llama32_3b
 
-# These analyses consume saved states and add no model forward.
 python3 -m experiments.prefix_response_subspaces.analyze_control_rank_sensitivity \
   --config "$ADDITIONAL_CONFIG"
 
-for name in qwen25_15b llama32_3b; do
-  replication_config="results/prefix_response_paper/full_fast_v1/fixed_replications/$name/replication_config.json"
-  python3 -m experiments.prefix_response_subspaces.analyze_control_rank_sensitivity \
-    --config "$replication_config"
-done
+python3 -m experiments.prefix_response_subspaces.analyze_shared_dictionary_controls \
+  --config "$MAIN_CONFIG" \
+  --data-parallel-device-ids 0 1 \
+  --dtype float32
+
+shared_run=$(ls -dt results/prefix_response_paper/full_fast_v1/shared_dictionary_controls/run_* | head -1)
+python3 -m experiments.prefix_response_subspaces.prepare_shared_dictionary_artifacts \
+  --run-dir "$shared_run"
+
+external_trajectory="data/commonsenseqa_prefix_response_trajectories_confirmatory.jsonl"
+if [[ ! -f "$external_trajectory" ]]; then
+  python3 scripts/prepare_reasoning_trajectories.py \
+    --config "$EXTERNAL_GENERATION_CONFIG" \
+    "${main_model_args[@]}"
+fi
+
+python3 -m experiments.prefix_response_subspaces.run_paper_pipeline \
+  --config "$EXTERNAL_CONFIG" \
+  "${main_model_args[@]}" \
+  --through-stage analyze_paper_geometry \
+  --skip-replication
+
+python3 -m experiments.prefix_response_subspaces.summarize_geometry_controls \
+  --config "$EXTERNAL_CONFIG"
+
+python3 scripts/validate_release.py

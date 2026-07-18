@@ -261,48 +261,83 @@ def _add_pooled_top_k_summary(summary, pooled_rows, top_ks, high_minimum, config
     return summary
 
 
-def _rotation_rows(train_r, prefixes, nonaux, wrong_map, rank, layer, fold, seed):
-    """Direct rotation and split-half reliability from already extracted branches."""
-    local, conditional = _fit_controls(train_r, prefixes, nonaux, rank)
+def _truncate_basis(basis, rank):
+    if basis is None:
+        return None
+    return basis[:, :min(int(rank), int(basis.shape[1]))]
+
+
+def _rotation_rows_for_ranks(train_r, prefixes, nonaux, wrong_map, ranks, layer, fold, seed):
+    """Direct rotation curves, sharing one maximum-rank SVD across all ranks."""
+    ranks = sorted(set(map(int, ranks)))
+    maximum_rank = max(ranks)
+    target_ids = {
+        prefixes[int(full_index)]["prefix_id"]
+        for full_index in nonaux
+        if prefixes[int(full_index)]["problem_group"] == "analysis_test"
+    }
+    required_local_ids = set(target_ids)
+    for prefix_id in target_ids:
+        required_local_ids.update(wrong_map.get(prefix_id, []))
+    local_full, conditional_full = _fit_controls(
+        train_r, prefixes, nonaux, maximum_rank,
+        required_local_ids=required_local_ids,
+    )
     count = int(train_r.shape[1])
     order = np.random.default_rng(int(seed) + 1009 * (int(fold) + 1)).permutation(count)
     first, second = np.sort(order[::2]), np.sort(order[1::2])
-    split_a = {}
-    split_b = {}
+    split_a_full = {}
+    split_b_full = {}
     for index, full_index in enumerate(nonaux):
         prefix_id = prefixes[int(full_index)]["prefix_id"]
-        split_a[prefix_id] = _basis(train_r[index, first], rank)
-        split_b[prefix_id] = _basis(train_r[index, second], rank)
-    rows = []
-    for full_index in nonaux:
-        prefix = prefixes[int(full_index)]
-        if prefix["problem_group"] != "analysis_test":
+        if prefix_id not in required_local_ids:
             continue
-        prefix_id = prefix["prefix_id"]
-        wrong_ids = [wrong_id for wrong_id in wrong_map.get(prefix_id, []) if wrong_id in local]
-        direct_wrong = [_projection_rotation_distance(local[prefix_id], local[wrong_id]) for wrong_id in wrong_ids]
-        between = [_projection_rotation_distance(split_a[prefix_id], split_b[wrong_id]) for wrong_id in wrong_ids]
-        within = _projection_rotation_distance(split_a[prefix_id], split_b[prefix_id])
-        between_mean = float(np.mean(between)) if between else float("nan")
-        global_basis, global_exact, length_distance, resolved_stratum = _resolve_conditional_basis(conditional, prefix)
-        rows.append({
-            "problem_id": prefix["problem_id"], "prefix_id": prefix_id,
-            "layer": int(layer), "fold": int(fold), "rank": int(rank),
-            "split_a_tokens": int(len(first)), "split_b_tokens": int(len(second)),
-            "split_half_effective_rank": min(int(split_a[prefix_id].shape[1]), int(split_b[prefix_id].shape[1])),
-            "local_global_effective_rank": min(int(local[prefix_id].shape[1]),int(global_basis.shape[1])) if global_basis is not None else 0,
-            "local_wrong_min_effective_rank": min([min(int(local[prefix_id].shape[1]),int(local[wrong_id].shape[1])) for wrong_id in wrong_ids],default=0),
-            "between_min_effective_rank": min([min(int(split_a[prefix_id].shape[1]),int(split_b[wrong_id].shape[1])) for wrong_id in wrong_ids],default=0),
-            "wrong_prefix_count": len(wrong_ids),
-            "conditional_global_exact_length_bin": bool(global_exact),
-            "conditional_global_length_bin_distance": length_distance,
-            "conditional_global_resolved_stratum": f"{resolved_stratum[0]}:{resolved_stratum[1]}" if resolved_stratum is not None else "",
-            "d_rotation_local_conditional_global": _projection_rotation_distance(local[prefix_id], global_basis),
-            "d_rotation_local_wrong_mean": float(np.mean(direct_wrong)) if direct_wrong else float("nan"),
-            "R_within": within, "R_between": between_mean,
-            "R_between_minus_within": between_mean - within,
-        })
+        split_a_full[prefix_id] = _basis(train_r[index, first], maximum_rank)
+        split_b_full[prefix_id] = _basis(train_r[index, second], maximum_rank)
+    rows = []
+    for rank in ranks:
+        local = {key: _truncate_basis(value, rank) for key, value in local_full.items()}
+        conditional = {key: _truncate_basis(value, rank) for key, value in conditional_full.items()}
+        split_a = {key: _truncate_basis(value, rank) for key, value in split_a_full.items()}
+        split_b = {key: _truncate_basis(value, rank) for key, value in split_b_full.items()}
+        for full_index in nonaux:
+            prefix = prefixes[int(full_index)]
+            if prefix["problem_group"] != "analysis_test":
+                continue
+            prefix_id = prefix["prefix_id"]
+            wrong_ids = [
+                wrong_id for wrong_id in wrong_map.get(prefix_id, [])
+                if local.get(wrong_id) is not None and split_b.get(wrong_id) is not None
+            ]
+            direct_wrong = [_projection_rotation_distance(local[prefix_id], local[wrong_id]) for wrong_id in wrong_ids]
+            between = [_projection_rotation_distance(split_a[prefix_id], split_b[wrong_id]) for wrong_id in wrong_ids]
+            within = _projection_rotation_distance(split_a[prefix_id], split_b[prefix_id])
+            between_mean = float(np.mean(between)) if between else float("nan")
+            global_basis, global_exact, length_distance, resolved_stratum = _resolve_conditional_basis(conditional, prefix)
+            rows.append({
+                "problem_id": prefix["problem_id"], "prefix_id": prefix_id,
+                "layer": int(layer), "fold": int(fold), "rank": int(rank),
+                "split_a_tokens": int(len(first)), "split_b_tokens": int(len(second)),
+                "split_half_effective_rank": min(int(split_a[prefix_id].shape[1]), int(split_b[prefix_id].shape[1])),
+                "local_global_effective_rank": min(int(local[prefix_id].shape[1]),int(global_basis.shape[1])) if global_basis is not None else 0,
+                "local_wrong_min_effective_rank": min([min(int(local[prefix_id].shape[1]),int(local[wrong_id].shape[1])) for wrong_id in wrong_ids],default=0),
+                "between_min_effective_rank": min([min(int(split_a[prefix_id].shape[1]),int(split_b[wrong_id].shape[1])) for wrong_id in wrong_ids],default=0),
+                "wrong_prefix_count": len(wrong_ids),
+                "conditional_global_exact_length_bin": bool(global_exact),
+                "conditional_global_length_bin_distance": length_distance,
+                "conditional_global_resolved_stratum": f"{resolved_stratum[0]}:{resolved_stratum[1]}" if resolved_stratum is not None else "",
+                "d_rotation_local_conditional_global": _projection_rotation_distance(local[prefix_id], global_basis),
+                "d_rotation_local_wrong_mean": float(np.mean(direct_wrong)) if direct_wrong else float("nan"),
+                "R_within": within, "R_between": between_mean,
+                "R_between_minus_within": between_mean - within,
+            })
     return rows
+
+
+def _rotation_rows(train_r, prefixes, nonaux, wrong_map, rank, layer, fold, seed):
+    return _rotation_rows_for_ranks(
+        train_r, prefixes, nonaux, wrong_map, [rank], layer, fold, seed,
+    )
 
 
 def _evaluate_rows(train_r, eval_r, prefixes, nonaux, wrong_map, rank, layer, fold, split, evaluation_candidate_indices, rank_map, top_ks, high_minimum, content_paths=None, excluded_content_positions=None, fitted_controls=None, content_bases=None):
@@ -504,11 +539,17 @@ def main() -> None:
         selected_layer, selected_rank, selection_diagnostics = _select_primary(dev_rows, layers, ranks, int(config["analysis"]["selection_rank"]), float(config["analysis"]["r90_fraction"]))
     test_primary = [row for row in all_rows if row["split"]=="evaluation" and row["layer"]==selected_layer and row["rank"]==selected_rank]
     pooled_top_k_rows = _pooled_top_k_rows(residual_manifest, selected_layer, selected_rank, prefixes, wrong_map, relaxed_wrong_targets, rank_map, top_ks)
-    rotation_rows=[]
+    rotation_rows=[]; rotation_rank_rows=[]
+    report_multirank_controls=bool(config["analysis"].get("report_multirank_controls",False))
     for entry in residual_manifest["entries"]:
         if int(entry["layer"]) != int(selected_layer): continue
         bundle=load_residual_entry(entry)
-        rotation_rows.extend(_rotation_rows(bundle["train_residuals"],prefixes,bundle["nonauxiliary_prefix_indices"],wrong_map,selected_rank,selected_layer,int(entry["fold"]),int(config["seed"])))
+        ranks_to_report=ranks if report_multirank_controls else [selected_rank]
+        rank_rows=_rotation_rows_for_ranks(bundle["train_residuals"],prefixes,bundle["nonauxiliary_prefix_indices"],wrong_map,ranks_to_report,selected_layer,int(entry["fold"]),int(config["seed"]))
+        for row in rank_rows:
+            row["wrong_control_exact_length_bin"]=row["prefix_id"] not in relaxed_wrong_targets
+        rotation_rank_rows.extend(rank_rows)
+        rotation_rows.extend(row for row in rank_rows if int(row["rank"])==int(selected_rank))
     expected_primary_rows=int(config["data"]["evaluation_prefixes"])*int(config["candidates"]["folds"])
     expected_wrong=int(config["controls"]["wrong_prefixes_per_target"])
     complete_wrong_rows=sum(int(row["wrong_prefix_count"])==expected_wrong for row in test_primary)
@@ -541,8 +582,8 @@ def main() -> None:
         atomic_json(permutation_path,{"null":{key:value.tolist() for key,value in null_values.items()},"diagnostics":permutation_diagnostics,"recentered":False})
     else:
         summary["permutation_diagnostics"]={"skipped":True,"reason":"cheap checkpoint replication repeats Experiment 1 geometry without permutation inference"}; atomic_json(permutation_path,summary["permutation_diagnostics"])
-    rows_path=root/"metrics/paper_geometry_rows.csv"; rotation_path=root/"metrics/paper_rotation_rows.csv"; pooled_path=root/"metrics/paper_topk_pooled_rows.csv"; energy_path=root/"metrics/interaction_energy.csv"; summary_path=root/"metrics/paper_geometry_summary.json"; _write_csv(rows_path,all_rows); _write_csv(rotation_path,rotation_rows); _write_csv(pooled_path,pooled_top_k_rows); _write_csv(energy_path,energy_rows); atomic_json(summary_path,summary)
-    atomic_json(manifest_path,{"complete":True,"config_hash":stable_hash(config),**inputs,"rows":str(rows_path),"rows_sha256":file_sha256(rows_path),"rotation_rows":str(rotation_path),"rotation_rows_sha256":file_sha256(rotation_path),"pooled_top_k_rows":str(pooled_path),"pooled_top_k_rows_sha256":file_sha256(pooled_path),"energy":str(energy_path),"summary":str(summary_path),"permutation":str(permutation_path),"selected_layer":selected_layer,"selected_rank":selected_rank}); print(manifest_path)
+    rows_path=root/"metrics/paper_geometry_rows.csv"; rotation_path=root/"metrics/paper_rotation_rows.csv"; rotation_rank_path=root/"metrics/paper_rotation_rank_rows.csv"; pooled_path=root/"metrics/paper_topk_pooled_rows.csv"; energy_path=root/"metrics/interaction_energy.csv"; summary_path=root/"metrics/paper_geometry_summary.json"; _write_csv(rows_path,all_rows); _write_csv(rotation_path,rotation_rows); _write_csv(rotation_rank_path,rotation_rank_rows); _write_csv(pooled_path,pooled_top_k_rows); _write_csv(energy_path,energy_rows); atomic_json(summary_path,summary)
+    atomic_json(manifest_path,{"complete":True,"config_hash":stable_hash(config),**inputs,"rows":str(rows_path),"rows_sha256":file_sha256(rows_path),"rotation_rows":str(rotation_path),"rotation_rows_sha256":file_sha256(rotation_path),"rotation_rank_rows":str(rotation_rank_path),"rotation_rank_rows_sha256":file_sha256(rotation_rank_path),"pooled_top_k_rows":str(pooled_path),"pooled_top_k_rows_sha256":file_sha256(pooled_path),"energy":str(energy_path),"summary":str(summary_path),"permutation":str(permutation_path),"selected_layer":selected_layer,"selected_rank":selected_rank}); print(manifest_path)
 
 
 if __name__=="__main__": main()

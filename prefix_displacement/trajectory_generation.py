@@ -13,19 +13,67 @@ FINAL_ANSWER_PATTERN = re.compile(r"####\s*([^\n]+)")
 NUMBER_PATTERN = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 
-def stable_problem_id(source_split: str, index: int, question: str) -> str:
+def stable_problem_id(
+    source_split: str, index: int, question: str, dataset_key: str = "gsm8k",
+) -> str:
     digest = hashlib.sha256(question.encode("utf-8")).hexdigest()[:12]
-    return f"gsm8k-{source_split}-{index:05d}-{digest}"
+    normalized_key = re.sub(r"[^a-z0-9]+", "-", dataset_key.lower()).strip("-") or "dataset"
+    return f"{normalized_key}-{source_split}-{index:05d}-{digest}"
 
 
-def extract_reference_answer(answer_text: str) -> str:
+def _last_boxed_content(text: str) -> str | None:
+    matches = list(re.finditer(r"\\(?:boxed|fbox)\s*\{", text))
+    for match in reversed(matches):
+        start = match.end()
+        depth = 1
+        for index in range(start, len(text)):
+            if text[index] == "{" and (index == 0 or text[index - 1] != "\\"):
+                depth += 1
+            elif text[index] == "}" and (index == 0 or text[index - 1] != "\\"):
+                depth -= 1
+                if depth == 0:
+                    return text[start:index].strip()
+    return None
+
+
+def extract_reference_answer(answer_text: str, answer_format: str = "gsm8k") -> str:
+    if answer_format == "choice_label":
+        label = answer_text.strip().upper()
+        if not re.fullmatch(r"[A-Z]", label):
+            raise ValueError(f"multiple-choice answer is not a single label: {answer_text!r}")
+        return label
+    if answer_format == "math_boxed":
+        boxed = _last_boxed_content(answer_text)
+        if boxed is None:
+            raise ValueError("MATH solution does not contain a balanced boxed answer")
+        return boxed
+    if answer_format != "gsm8k":
+        raise ValueError(f"unsupported reference answer format: {answer_format}")
     matches = FINAL_ANSWER_PATTERN.findall(answer_text)
     if not matches:
         raise ValueError("GSM8K answer does not contain a #### final answer marker")
     return matches[-1].strip().replace(",", "")
 
 
-def extract_generated_answer(text: str) -> str | None:
+def extract_generated_answer(text: str, answer_format: str = "numeric") -> str | None:
+    if answer_format == "choice_label":
+        explicit = re.findall(
+            r"(?i)(?:final\s+answer|answer|choice)\s*(?:is|:|=)?\s*\(?([A-Z])\)?\b",
+            text,
+        )
+        if explicit:
+            return explicit[-1].upper()
+        parenthesized = re.findall(r"(?i)(?:^|\s)\(([A-Z])\)(?=\s|[.,;:!?]|$)", text)
+        if parenthesized:
+            return parenthesized[-1].upper()
+        standalone = re.findall(r"(?im)^\s*\(?([A-Z])\)?[.)]?\s*$", text)
+        return standalone[-1].upper() if standalone else None
+    if answer_format == "math_boxed":
+        boxed = _last_boxed_content(text)
+        if boxed is not None:
+            return boxed
+    elif answer_format != "numeric":
+        raise ValueError(f"unsupported generated answer format: {answer_format}")
     matches = NUMBER_PATTERN.findall(text)
     return matches[-1].replace(",", "") if matches else None
 
@@ -39,10 +87,21 @@ def normalized_number(value: str | None) -> Decimal | None:
         return None
 
 
-def is_correct_answer(generated: str | None, reference: str) -> bool:
+def is_correct_answer(
+    generated: str | None, reference: str, answer_format: str = "numeric",
+) -> bool:
     generated_value = normalized_number(generated)
     reference_value = normalized_number(reference)
-    return generated_value is not None and reference_value is not None and generated_value == reference_value
+    if generated_value is not None and reference_value is not None:
+        return generated_value == reference_value
+    if answer_format == "choice_label":
+        return generated is not None and generated.strip().upper() == reference.strip().upper()
+    if answer_format == "math_boxed" and generated is not None:
+        normalize = lambda value: re.sub(r"\s+", "", value).replace("\\!", "")
+        return normalize(generated) == normalize(reference)
+    if answer_format != "numeric":
+        raise ValueError(f"unsupported correctness answer format: {answer_format}")
+    return False
 
 
 def first_distinct_answer_tokens(

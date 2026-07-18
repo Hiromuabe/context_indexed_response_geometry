@@ -1,0 +1,30 @@
+{
+  "model_config": "configs/basepoint_main.json",
+  "dataset": {
+    "name": "tau/commonsense_qa",
+    "subset": "default",
+    "source_split": "train",
+    "revision": "main",
+    "max_problems": 96,
+    "question_field": "question",
+    "answer_field": "answerKey",
+    "answer_format": "choice_label",
+    "id_prefix": "commonsenseqa"
+  },
+  "prompt": {
+    "template": "Question: {question}\nChoices:\n{choices_text}\nReason step by step, then state the final answer as a single choice letter.\n"
+  },
+  "generation": {
+    "strategy": "greedy",
+    "max_new_tokens": 64,
+    "stop_on_eos": true,
+    "use_kv_cache": true,
+    "answer_cue": "\nFinal answer:"
+  },
+  "runtime": {"per_device_batch_size": 8, "precision": "auto"},
+  "output": {
+    "trajectories_jsonl": "data/commonsenseqa_prefix_response_trajectories_smoke.jsonl",
+    "metadata_json": "data/commonsenseqa_prefix_response_trajectories_smoke.metadata.json",
+    "gpu_memory_jsonl": "data/commonsenseqa_prefix_response_trajectories_smoke.gpu_memory.jsonl"
+  }
+}

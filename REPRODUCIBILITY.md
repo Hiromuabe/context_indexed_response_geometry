@@ -1,61 +1,78 @@
 # Reproducibility record
 
-## Experimental design encoded by the pipeline
+## Experimental design
 
-- Dataset: GSM8K `main`, train split; one sampled prefix per original problem.
-- Candidate inputs: 320 shared tokens, with disjoint calibration and analysis
-  partitions; analysis uses four 192-fit/64-held-out folds.
-- Statistical unit: original GSM8K problem ID.
-- Controls: a development-conditioned common space and five wrong-context
-  donors. Wrong-donor metrics are averaged within a problem before bootstrap.
-- Selection: layer and rank are selected on development data only. Fixed-model
-  replications use decoder block 0 and rank 64 without reselection.
-- Functional analysis: reconstructed activations are reintroduced and compared
-  by Jensen--Shannon distance to the clean output distribution.
+- Main dataset: GSM8K `main`, train split.
+- External dataset: CommonsenseQA `default`, train split.
+- Statistical unit: original problem ID.
+- Prefixes: one sampled prefix per problem.
+- Candidate inputs: 320 shared tokens, including 64 calibration tokens and
+  256 analysis tokens.
+- Candidate evaluation: four disjoint 192-fit/64-held-out folds.
+- Controls: target-context PCA, matched-common subspace, and five wrong-context
+  donors.
+- Inference: four folds are averaged within problem before problem-level
+  bootstrap confidence intervals are calculated.
+- External replication: decoder block 0 and rank 64 are fixed before evaluation;
+  ranks 1, 2, 4, 8, 16, 32, and 64 form the sensitivity curve.
 
-The resolved configuration and manifests written by every stage are the
-authoritative record. A run is not reproducible from a table of aggregate
-numbers alone; retain the manifests, candidate-token file, prefix split, and
-wrong-context assignments with the published artifact archive.
+## Model record
 
-## Standard public reproduction environment
+The main and CommonsenseQA runs used `Qwen/Qwen2.5-Math-1.5B`.
+The resolved checkpoint revision recorded by the executed run was:
 
-- Qwen2.5-Math-1.5B, Qwen2.5-1.5B, and Llama-3.2-3B run on two NVIDIA A100
-  80GB GPUs. These three checkpoints form the standard public suite.
+```text
+4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2
+```
 
-Qwen3-8B-Base is an optional large-model replication, not a requirement of the
-standard entry point. The reported Qwen3 run used eight NVIDIA A100 GPUs with
-`torch.nn.DataParallel` and bfloat16; hidden size 4096 and 36 decoder blocks.
+Configurations retain the requested Hub revision and every extraction manifest
+records the resolved revision returned by Transformers.
+When exact artifact reproduction matters, compare the manifest revision rather
+than relying on a mutable branch name.
 
-The code records device IDs, precision, parallelism, hidden size, decoder
-depth, platform, and resolved model metadata in its manifests. A100 memory
-capacity and the exact CUDA/driver/library versions must be taken from the
-server-generated `environment.txt`; they are not inferable from source code.
-`environment.txt` records the standard two-A100 server. An eight-GPU
-environment record is needed only when distributing the optional Qwen3 run.
+## Shared-direction control
 
-## Checkpoint revisions currently verified
+Each candidate fold fits pooled PCA, CPC, and a non-orthogonal dictionary using
+only the 192 training candidates.
+Held-out EV uses the disjoint 64-candidate evaluation subset.
 
-- `Qwen/Qwen2.5-Math-1.5B`:
-  `4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2`
-- `Qwen/Qwen3-8B-Base`:
-  `49e3418fbbbca6ecbdf9608b4d22e5a407081db4`
+The full control grid contains:
 
-The exact resolved revisions for Qwen2.5-1.5B and Llama-3.2-3B must be copied
-from their `manifests/hidden_states.json` files before the release tag. The
-checked-in configurations retain `main` because they mirror the executed
-working configuration; for a frozen replication release, make pinned copies.
+- dictionary widths 64, 96, 128, 160, 192, and 256;
+- evaluation ranks 1, 2, 4, 8, 16, 32, and 64;
+- dictionary coherence penalties 0, 0.0001, and 0.001;
+- five deterministic optimization restarts per fit;
+- 2,000 optimization steps per restart.
+
+Restarts are selected by training loss, never by held-out EV.
+The reported primary dictionary condition fixes width 256, penalty 0, rank 64,
+and `leave_one_context_out=False`.
 
 ## Artifact flow
 
-1. `scripts/prepare_gsm8k_trajectories.py` generates deterministic greedy
-   reasoning trajectories when the configured JSONL is absent.
-2. `build_prefix_pool` fixes problem-level partitions and prefix positions.
-3. `build_candidate_tokens` fixes shared candidate inputs and analysis folds.
-4. `extract_successor_states` records the branched hidden states.
-5. `compute_contrast_residuals` performs double centering.
-6. Geometry, mechanism, rank, and functional modules consume these immutable
-   artifacts and write summaries under the configured `results_root`.
+1. `scripts/prepare_reasoning_trajectories.py` generates deterministic greedy
+   trajectories when the configured JSONL is absent.
+2. `build_prefix_pool` creates deterministic problem-level groups and prefix
+   positions.
+3. `build_candidate_tokens` fixes the shared candidate set and four analysis
+   folds.
+4. `extract_successor_states` writes hidden-state arrays.
+5. `compute_contrast_residuals` applies split-local double centering.
+6. Geometry and control modules consume the saved arrays and write summaries.
+7. `summarize_geometry_controls` applies the same problem bootstrap to GSM8K
+   and CommonsenseQA rank curves.
 
-Do not combine outputs from different roots unless their manifest hashes,
-prefix axes, token axes, model revision, and configuration hashes agree.
+The resolved configuration, candidate split, prefix snapshot, wrong-context
+assignments, and stage manifests are the authoritative execution record.
+Do not combine artifacts from different result roots unless their model
+revision, configuration hash, prefix axis, and candidate axis agree.
+
+## Publication hygiene
+
+Generated manifests may contain an explicit local checkpoint path when
+`--model-path` is used.
+Do not commit generated `data/`, `results/`, `logs/`, or manifest archives to an
+anonymous repository without inspecting and sanitizing them first.
+
+The checked-in source and example figures contain no local paths, usernames,
+hostnames, author names, email addresses, or repository-history metadata.

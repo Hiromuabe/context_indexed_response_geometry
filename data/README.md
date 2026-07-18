@@ -1,9 +1,12 @@
 # Data directory
 
-No dataset or generated model trajectory is redistributed here.
+No dataset copy, model trajectory, hidden state, or candidate tensor is
+redistributed with this repository.
 
-The default paper profile downloads GSM8K through Hugging Face Datasets and
-generates `data/gsm8k_prefix_response_trajectories_paper_fast.jsonl` when it is
-missing. Dataset access and redistribution remain subject to the upstream
-dataset license and terms. Generated files and their metadata are ignored by
-Git; archive their hashes and metadata separately with the paper artifacts.
+The trajectory generator downloads the configured public dataset through
+Hugging Face Datasets and writes immutable JSONL and metadata files below this
+directory.
+Dataset access and redistribution remain subject to the upstream dataset terms.
+
+Generated data and metadata are ignored by Git because run manifests can record
+local checkpoint paths.

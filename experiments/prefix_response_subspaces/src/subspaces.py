@@ -54,6 +54,24 @@ def explained_variance(samples: np.ndarray, basis: np.ndarray, eps: float = 1e-1
     return float(np.square(x @ u).sum() / denominator)
 
 
+def principal_angle_cosines_squared(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """Return cos² principal angles in descending-alignment order."""
+    u = np.asarray(left, dtype=np.float64)
+    v = np.asarray(right, dtype=np.float64)
+    if u.ndim != 2 or v.ndim != 2 or u.shape[0] != v.shape[0]:
+        raise ValueError("bases must have compatible [hidden, rank] shapes")
+    rank = min(u.shape[1], v.shape[1])
+    if rank == 0:
+        return np.empty(0, dtype=np.float64)
+    singular = np.linalg.svd(u[:, :rank].T @ v[:, :rank], compute_uv=False)
+    return np.clip(np.square(singular), 0.0, 1.0)
+
+
+def normalized_projection_distance(left: np.ndarray, right: np.ndarray) -> float:
+    cos2 = principal_angle_cosines_squared(left, right)
+    return float(1.0 - cos2.mean()) if len(cos2) else float("nan")
+
+
 def content_subspace(prefix_hidden: np.ndarray, rank: int, *, excluded_positions: set[int] | None = None) -> tuple[np.ndarray, np.ndarray]:
     hidden = np.asarray(prefix_hidden, dtype=np.float64)
     if hidden.ndim != 2:

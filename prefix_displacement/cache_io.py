@@ -53,6 +53,7 @@ def runtime_environment() -> dict[str, Any]:
     return {
         "python": sys.version.split()[0],
         "torch": str(torch.__version__),
+        "hostname": platform.node(),
         "platform": platform.platform(),
         "cuda_available": cuda_available,
         "cuda_runtime": str(torch.version.cuda) if torch.version.cuda is not None else None,

@@ -6,6 +6,7 @@ import os
 import random
 import subprocess
 import platform
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -143,7 +144,7 @@ def ensure_layout(config: dict[str, Any]) -> Path:
     if snapshot_changed and metadata_path.exists():
         metadata_path.unlink()
     if not metadata_path.exists():
-        metadata: dict[str, Any] = {"config_hash": stable_hash(config), "seed": config.get("seed"), "git_commit": git_commit(), "python": platform.python_version(), "platform": platform.platform()}
+        metadata: dict[str, Any] = {"config_hash": stable_hash(config), "seed": config.get("seed"), "git_commit": git_commit(), "hostname": socket.gethostname(), "python": platform.python_version(), "platform": platform.platform()}
         try:
             import numpy as np
             metadata["numpy"] = np.__version__
