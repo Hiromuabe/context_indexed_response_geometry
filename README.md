@@ -107,6 +107,7 @@ python3 -m experiments.prefix_response_subspaces.summarize_geometry_controls \
   --config experiments/prefix_response_subspaces/configs/commonsenseqa_geometry_confirmatory.yaml
 ```
 
+
 The summarizer writes the rank-wise Target, Matched-common, Wrong-context,
 Within, and Between estimates and the combined GSM8K/CommonsenseQA figures.
 
@@ -135,3 +136,4 @@ that escape the release directory.
 
 The source package contains no author or affiliation metadata.
 Choose a software license before publishing the repository.
+
